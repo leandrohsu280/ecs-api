@@ -8,7 +8,6 @@ def read_root():
 
 @app.get("/ecs/status/{cluster_name}")
 async def get_ecs_status(cluster_name: str):
-    # 返回測試數據
     return {
         "cluster": cluster_name,
         "services": [
