@@ -9,7 +9,7 @@ Build API Server on AWS App Runner to monitor ECS Service - overall
 4.Choose repository contain "Dockerfile, main.py and requirements.txt"
 
 5.Next page for build setting click "Python3 for runtime", type "pip install -r requirements.txt" on build command and "uvicorn main:app --host 0.0.0.0 --port 8080" on start command.
-  Default port is 8080 which may also be changed form your modified port on main.py
+  Default port is 8080 which may also be changed from your modified port on main.py
 
 6.Desire your service name, vCpu and vMemory based on your startegy.
 
