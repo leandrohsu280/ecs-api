@@ -3,7 +3,7 @@ const app = require('express')();
 const aws = require('aws-sdk');
 require('aws-sdk/lib/maintenance_mode_message').suppress = true;
 
-const config = require('./env.json')
+// const config = require('./env.json')
 
 const api_init = require('./api/init.js')
 const web_init = require('./public/init.js')
