@@ -1,0 +1,269 @@
+@font-face {
+    font-family: 'Pixel-Text';
+    src: url('../font/Cubic_11.ttf');
+}
+
+@font-face {
+    font-family: 'foot-power-by';
+    src: url('../font/XiaolaiSC-Regular.ttf');
+}
+
+body {
+    background-image: url('https://i.imgur.com/P87pzZJ.png');
+    background-size: cover;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    transition: all 1s ease-in-out;
+}
+
+.animation-spin {
+    animation: pulsate 5s infinite alternate;
+}
+
+.background-mid-container {
+    width: 600px;
+    height: 600px;
+    background-image: url('https://i.imgur.com/94zZvda.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    opacity: 0.8;
+    animation: rotate 60s linear infinite;
+}
+
+.bg-out-container {
+    transform: scale(1);
+    transition: all 1s ease-in-out;
+}
+
+.border-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.border-lines::before,
+.border-lines::after {
+    content: "";
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border: 6px solid rgba(106, 106, 186, 0.8);
+}
+
+.border-lines::before {
+    top: 100px;
+    left: 100px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.border-lines::after {
+    bottom: 100px;
+    right: 100px;
+    border-left: none;
+    border-top: none;
+}
+
+.mid-text {
+    font-family: 'Pixel-Text';
+    transition: all 1s ease-in-out;
+}
+
+.mid-text.active {
+    transition-delay: 1s;
+    transform: translateY(-20rem);
+    width: fit-content;
+    height: fit-content;
+    padding: 2rem;
+    border-radius: 2rem;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    box-shadow: 0 0 5rem rgba(0, 0, 0, 1);
+}
+
+
+.left-top-avatar {
+    transition: transform 0.3s;
+    transform: scale(0.9);
+    box-shadow: 0 0px 25px 10px rgba(255, 255, 222, 0.9);
+}
+
+.left-top-avatar.active {
+    transform: scale(1) rotate(360deg);
+}
+
+.toolbtn {
+    transition: all 0.3s;
+}
+
+.toolbtn:hover {
+    transform: scale(1.1);
+}
+
+.toolbtn.active {
+    transform: scale(1.3) rotate(360deg);
+    left: 50%;
+    bottom: 20px;
+}
+
+
+.avatar-dropmenu {
+    background-color: rgb(30, 41, 59, 0.35);
+    transition: all 0.3s ease;
+    transform: translateY(-10px);
+}
+
+.avatar-dropmenu.show {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.avatar-dropmenu-a {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: #fff;
+    justify-content: center;
+    padding: 10px;
+    transition: ease-in-out 0.3s;
+}
+
+.avatar-dropmenu-a-i {
+    width: 2.7rem;
+    height: 2.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #00000075;
+    border-radius: 9999px;
+    padding: 1rem;
+    margin: 0.5rem auto;
+    transition: ease-in-out 0.3s;
+}
+
+.avatar-dropmenu-a-i:first-child {
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.avatar-dropmenu-a-i:last-child {
+    margin-bottom: 0;
+}
+
+.avatar-dropmenu-a-i:hover {
+    box-shadow: 0 4px 30px rgba(255, 255, 255, 0.9);
+    transform: scale(1.1);
+}
+
+.power-by-container {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.power-by {
+    font-family: foot-power-by;
+}
+
+.power-by-underline {
+    width: 100%;
+    height: 1px;
+    background-color: #ffffff;
+    margin-top: 5px;
+}
+
+
+.tool-container {
+    transition: all 1s ease-out;
+}
+
+
+#snowfall {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+
+
+@keyframes avtarIn {
+    from {
+        opacity: 0;
+        transform: translateX(0px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes avtarOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(0);
+    }
+}
+
+@keyframes toolIn {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(0);
+    }
+}
+
+@keyframes toolOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulsate {
+    0% {
+        transform: scale(1);
+    }
+
+    100% {
+        transform: scale(1.1);
+    }
+}
+
+@keyframes rotate {
+    0% {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
