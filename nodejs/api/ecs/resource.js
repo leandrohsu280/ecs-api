@@ -1,5 +1,3 @@
-const { raw } = require('express');
-
 module.exports = {
     name: 'resource',
 
