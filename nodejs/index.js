@@ -24,7 +24,7 @@ function start(){
 
     // app.listen(config.serverPort, () => {
     app.listen(8080, () => {
-        console.log(`Server started on port ${config.serverPort}`);
+        console.log(`Server started on port 8080`);
     })
 }
 
