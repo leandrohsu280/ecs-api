@@ -22,7 +22,8 @@ function start(){
     api_init.init(app, aws);
     web_init.init(app);
 
-    app.listen(config.serverPort, () => {
+    // app.listen(config.serverPort, () => {
+    app.listen(8080, () => {
         console.log(`Server started on port ${config.serverPort}`);
     })
 }
