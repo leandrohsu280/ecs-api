@@ -1,105 +1,207 @@
 from fastapi import FastAPI, HTTPException
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
-from datetime import datetime, timedelta
+from typing import Dict, Any
 
-app = FastAPI(title="ECS Cluster and Service Status API")
+# Initialize the FastAPI app
+app = FastAPI()
+
+# AWS Boto3 clients for ECS and CloudWatch
 ecs_client = boto3.client('ecs')
 cloudwatch_client = boto3.client('cloudwatch')
+ec2_client = boto3.client('ec2')
+cloudtrail_client = boto3.client('cloudtrail')
 
-@app.get("/")
-def read_root():
-    return {"message": "ECS Cluster and Service Status API is running"}
-
-@app.get("/ecs/cluster/{cluster_name}")
-async def get_cluster_status(cluster_name: str):
+@app.get("/ecs/clusters")
+def list_ecs_clusters():
+    """Fetches the list of ECS clusters."""
     try:
-        # Calculate time range for CloudWatch metrics
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(days=1)
-
-        # Retrieve CloudWatch metrics for the cluster (e.g., CPU and memory utilization)
-        cluster_metrics = {}
-        for metric_name in ['CPUUtilization', 'MemoryUtilization']:
-            metric_data = cloudwatch_client.get_metric_statistics(
-                Namespace='AWS/ECS',
-                MetricName=metric_name,
-                Dimensions=[
-                    {'Name': 'ClusterName', 'Value': cluster_name}
-                ],
-                StartTime=start_time.isoformat(),
-                EndTime=end_time.isoformat(),
-                Period=300,
-                Statistics=['Average']
-            )
-            cluster_metrics[metric_name] = metric_data.get('Datapoints', [{}])[0].get('Average', 0)
-
-        # Retrieve Auto Scaling Group (ASG) details (mocked for this example)
-        # Integration with ASG API or tagging strategies would be needed for real-world use
-        asg_details = {
-            "desiredCapacity": 5,
-            "runningInstances": 5,
-            "pendingInstances": 0
-        }
-
-        return {
-            "cluster": cluster_name,
-            "metrics": cluster_metrics,
-            "asgDetails": asg_details
-        }
-
-    except (BotoCoreError, ClientError) as e:
-        raise HTTPException(status_code=500, detail=f"AWS error: {str(e)}")
+        response = ecs_client.list_clusters()
+        return {"clusters": response.get("clusterArns", [])}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/ecs/service/{cluster_name}/{service_name}")
-async def get_service_status(cluster_name: str, service_name: str):
+@app.get("/ecs/{cluster_name}/services")
+def list_services_in_cluster(cluster_name: str):
+    """Fetches services in a given ECS cluster."""
     try:
-        # Calculate time range for CloudWatch metrics
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(days=1)
+        response = ecs_client.list_services(cluster=cluster_name)
+        return {"services": response.get("serviceArns", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-        # Retrieve CloudWatch metrics for the service (e.g., CPU and memory utilization)
-        service_metrics = {}
-        for metric_name in ['CPUUtilization', 'MemoryUtilization']:
-            metric_data = cloudwatch_client.get_metric_statistics(
-                Namespace='AWS/ECS',
-                MetricName=metric_name,
-                Dimensions=[
-                    {'Name': 'ClusterName', 'Value': cluster_name},
-                    {'Name': 'ServiceName', 'Value': service_name}
-                ],
-                StartTime=start_time.isoformat(),
-                EndTime=end_time.isoformat(),
-                Period=300,
-                Statistics=['Average']
+@app.get("/ecs/{cluster_name}/tasks")
+def list_tasks_in_cluster(cluster_name: str):
+    """Fetches tasks running in a given ECS cluster."""
+    try:
+        response = ecs_client.list_tasks(cluster=cluster_name)
+        return {"tasks": response.get("taskArns", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cloudwatch/metrics")
+def list_cloudwatch_metrics(namespace: str):
+    """Lists metrics available in CloudWatch for a given namespace."""
+    try:
+        response = cloudwatch_client.list_metrics(Namespace=namespace)
+        return {"metrics": response.get("Metrics", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cloudwatch/logs")
+def get_cloudwatch_logs(log_group_name: str):
+    """Fetches CloudWatch logs from a specific log group."""
+    try:
+        logs_client = boto3.client('logs')
+        response = logs_client.describe_log_streams(logGroupName=log_group_name)
+        streams = response.get("logStreams", [])
+        logs = []
+        for stream in streams:
+            log_events = logs_client.get_log_events(
+                logGroupName=log_group_name, 
+                logStreamName=stream["logStreamName"]
             )
-            service_metrics[metric_name] = metric_data.get('Datapoints', [{}])[0].get('Average', 0)
+            for event in log_events.get("events", []):
+                logs.append({
+                    "timestamp": event.get("timestamp"),
+                    "message": event.get("message")
+                })
+        return {"logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-        # Retrieve ECS service details
-        service_details = ecs_client.describe_services(
-            cluster=cluster_name,
-            services=[service_name]
+@app.get("/cloudwatch/errors")
+def get_cloudwatch_errors(log_group_name: str):
+    """Fetches CloudWatch error logs from a specific log group."""
+    try:
+        logs_client = boto3.client('logs')
+        response = logs_client.describe_log_streams(logGroupName=log_group_name)
+        streams = response.get("logStreams", [])
+        errors = []
+        for stream in streams:
+            log_events = logs_client.get_log_events(
+                logGroupName=log_group_name, 
+                logStreamName=stream["logStreamName"]
+            )
+            for event in log_events.get("events", []):
+                message = event.get("message", "")
+                if "ERROR" in message.upper():
+                    errors.append({
+                        "timestamp": event.get("timestamp"),
+                        "message": message
+                    })
+        return {"errors": errors}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ec2/instances")
+def list_ec2_instances():
+    """Lists all EC2 instances and their states."""
+    try:
+        response = ec2_client.describe_instances()
+        instances = []
+        for reservation in response.get("Reservations", []):
+            for instance in reservation.get("Instances", []):
+                instances.append({
+                    "InstanceId": instance.get("InstanceId"),
+                    "State": instance.get("State", {}).get("Name"),
+                    "LaunchTime": instance.get("LaunchTime"),
+                    "PublicIpAddress": instance.get("PublicIpAddress"),
+                    "PrivateIpAddress": instance.get("PrivateIpAddress"),
+                    "InstanceType": instance.get("InstanceType"),
+                    "Tags": instance.get("Tags", [])
+                })
+        return {"instances": instances}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ec2/{instance_id}/logs")
+def get_instance_logs(instance_id: str):
+    """Fetches logs and error codes for a specific EC2 instance."""
+    try:
+        logs_client = boto3.client('logs')
+        log_group_name = f"/aws/ec2/{instance_id}"
+        response = logs_client.describe_log_streams(logGroupName=log_group_name)
+        streams = response.get("logStreams", [])
+        logs = []
+        for stream in streams:
+            log_events = logs_client.get_log_events(
+                logGroupName=log_group_name,
+                logStreamName=stream["logStreamName"]
+            )
+            for event in log_events.get("events", []):
+                logs.append({
+                    "timestamp": event.get("timestamp"),
+                    "message": event.get("message")
+                })
+        return {"logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ec2/{instance_id}/errors")
+def get_instance_errors(instance_id: str):
+    """Fetches error logs for a specific EC2 instance."""
+    try:
+        logs_client = boto3.client('logs')
+        log_group_name = f"/aws/ec2/{instance_id}"
+        response = logs_client.describe_log_streams(logGroupName=log_group_name)
+        streams = response.get("logStreams", [])
+        errors = []
+        for stream in streams:
+            log_events = logs_client.get_log_events(
+                logGroupName=log_group_name,
+                logStreamName=stream["logStreamName"]
+            )
+            for event in log_events.get("events", []):
+                message = event.get("message", "")
+                if "ERROR" in message.upper():
+                    errors.append({
+                        "timestamp": event.get("timestamp"),
+                        "message": message
+                    })
+        return {"errors": errors}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cloudtrail/events")
+def get_cloudtrail_events(start_time: str, end_time: str):
+    """Fetches CloudTrail events in a specific time range."""
+    try:
+        response = cloudtrail_client.lookup_events(
+            StartTime=start_time,
+            EndTime=end_time,
+            MaxResults=50
         )
-        service_status = service_details['services'][0] if service_details['services'] else {}
-
-        return {
-            "cluster": cluster_name,
-            "service": service_name,
-            "metrics": service_metrics,
-            "status": {
-                "desiredCount": service_status.get("desiredCount"),
-                "runningCount": service_status.get("runningCount"),
-                "pendingCount": service_status.get("pendingCount"),
-                "status": service_status.get("status")
-            }
-        }
-
-    except (BotoCoreError, ClientError) as e:
-        raise HTTPException(status_code=500, detail=f"AWS error: {str(e)}")
+        events = response.get("Events", [])
+        return {"events": events}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cloudtrail/user-activities")
+def get_user_activities(user_name: str):
+    """Fetches CloudTrail events for a specific user."""
+    try:
+        response = cloudtrail_client.lookup_events(
+            LookupAttributes=[
+                {"AttributeKey": "Username", "AttributeValue": user_name}
+            ]
+        )
+        events = response.get("Events", [])
+        return {"user_activities": events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cloudtrail/errors")
+def get_failed_events():
+    """Fetches CloudTrail events with failed operations."""
+    try:
+        response = cloudtrail_client.lookup_events()
+        events = response.get("Events", [])
+        failed_events = [
+            event for event in events if "errorCode" in event.get("CloudTrailEvent", "")
+        ]
+        return {"failed_events": failed_events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
