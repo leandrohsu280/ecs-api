@@ -2,6 +2,9 @@ from fastapi import FastAPI, HTTPException
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from datetime import datetime, timedelta
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="ECS Cluster, Service, and Container Status API")
 ecs_client = boto3.client('ecs')
@@ -19,6 +22,8 @@ def get_metric_statistics(namespace, metric_name, dimensions, start_time, end_ti
             Statistics=statistics
         )
         datapoints = response.get('Datapoints', [])
+        if not datapoints:
+            logging.warning(f"No data points found for {metric_name} with dimensions {dimensions}")
         return {
             stat: max((dp.get(stat, 0) for dp in datapoints), default=0) for stat in statistics
         }
@@ -125,6 +130,8 @@ def get_container_status(cluster_name: str, task_arn: str):
                 )
                 for metric in ['CPUUtilized', 'MemoryUtilized']
             }
+            if all(value == 0 for stat in metrics.values() for value in stat.values()):
+                logging.warning(f"Metrics for container {container_name} returned all zeros. Check if Container Insights is enabled.")
             container_metrics[container_name] = metrics
 
         return {
