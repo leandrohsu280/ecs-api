@@ -120,12 +120,11 @@ async def get_service_status(cluster_name: str, service_name: str, start_time: d
 async def get_task_logs(cluster_name: str, service_name: str):
     try:
         log_group_name = f"/aws/ecs/containerinsights/{cluster_name}/performance"
-        log_stream_prefix = f"AgentTelemetry-"
 
+        # Retrieve log streams without ordering by LastEventTime
         log_streams = logs_client.describe_log_streams(
             logGroupName=log_group_name,
-            logStreamNamePrefix=log_stream_prefix,
-            orderBy="LastEventTime",
+            orderBy="LogStreamName",
             descending=True
         )
         log_streams_info = log_streams.get('logStreams', [])
