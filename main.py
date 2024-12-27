@@ -116,28 +116,34 @@ async def get_service_status(cluster_name: str, service_name: str, start_time: d
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-@app.get("/ecs/task/logs/{cluster_name}")
-async def get_task_logs(cluster_name: str):
+@app.get("/ecs/task/logs/{cluster_name}/{service_name}")
+async def get_task_logs(cluster_name: str, service_name: str):
     try:
-        # 確定 Log Group 名稱
-        log_group_name = f"/aws/ecs/{cluster_name}"
-        
-        # 指定特定的 Log Stream 名稱
-        specific_log_stream_name = "AgentTelemetry-6b043a46d6fc46a7b8f8231051403af4"
-        logging.info(f"Using log stream: {specific_log_stream_name}")
+        log_group_name = f"/aws/ecs/containerinsights/{cluster_name}/performance"
 
-        # 提取指定 Log Stream 的日誌事件
+        # Retrieve log streams with AgentTelemetry prefix
+        log_streams = logs_client.describe_log_streams(
+            logGroupName=log_group_name,
+            logStreamNamePrefix="AgentTelemetry-",
+            orderBy="LogStreamName",
+            descending=True
+        )
+        log_streams_info = log_streams.get('logStreams', [])
+
+        if not log_streams_info:
+            logging.warning(f"No log streams found for log group {log_group_name}")
+            return {"message": "No logs found"}
+
+        # Fetch logs from the most recent log stream
+        log_stream_name = log_streams_info[0]['logStreamName']
         log_events = logs_client.get_log_events(
             logGroupName=log_group_name,
-            logStreamName=specific_log_stream_name,
-            startFromHead=True
+            logStreamName=log_stream_name
         )
-        events = [{"timestamp": event["timestamp"], "message": event["message"]} for event in log_events.get('events', [])]
-
         return {
             "cluster": cluster_name,
-            "log_stream": specific_log_stream_name,
-            "log_events": events
+            "service": service_name,
+            "log_events": log_events.get('events', [])
         }
 
     except (BotoCoreError, ClientError) as e:
