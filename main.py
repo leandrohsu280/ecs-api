@@ -150,18 +150,31 @@ async def get_task_logs(cluster_name: str, service_name: str):
             message = json.loads(event.get('message', '{}'))
             utc_time = datetime.utcfromtimestamp(event['timestamp'] / 1000).replace(tzinfo=timezone.utc)
             local_time = utc_time.astimezone(taipei_tz).isoformat()
-            formatted_logs.append({
-                "timestamp": local_time,
-                "container_name": message.get("ContainerName"),
-                "task_id": message.get("TaskId"),
-                "cpu_utilized": message.get("ContainerCpuUtilized"),
-                "memory_utilized": message.get("ContainerMemoryUtilized"),
-                "memory_utilization": message.get("ContainerMemoryUtilization"),
-                "storage_read_bytes": message.get("ContainerStorageReadBytes"),
-                "storage_write_bytes": message.get("ContainerStorageWriteBytes"),
-                "network_rx_bytes": message.get("ContainerNetworkRxBytes"),
-                "network_tx_bytes": message.get("ContainerNetworkTxBytes")
-            })
+            if message.get("Type") == "Container":
+                formatted_logs.append({
+                    "timestamp": local_time,
+                    "container_name": message.get("ContainerName"),
+                    "task_id": message.get("TaskId"),
+                    "cpu_utilized": message.get("ContainerCpuUtilized"),
+                    "memory_utilized": message.get("ContainerMemoryUtilized"),
+                    "memory_utilization": message.get("ContainerMemoryUtilization"),
+                    "storage_read_bytes": message.get("ContainerStorageReadBytes"),
+                    "storage_write_bytes": message.get("ContainerStorageWriteBytes"),
+                    "network_rx_bytes": message.get("ContainerNetworkRxBytes"),
+                    "network_tx_bytes": message.get("ContainerNetworkTxBytes")
+                })
+            elif message.get("Type") == "Task":
+                formatted_logs.append({
+                    "timestamp": local_time,
+                    "task_id": message.get("TaskId"),
+                    "service_name": message.get("ServiceName"),
+                    "cluster_name": message.get("ClusterName"),
+                    "task_definition": f"{message.get('TaskDefinitionFamily')}:{message.get('TaskDefinitionRevision')}",
+                    "known_status": message.get("KnownStatus"),
+                    "cpu_reserved": message.get("CpuReserved"),
+                    "memory_reserved": message.get("MemoryReserved"),
+                    "started_at": datetime.utcfromtimestamp(message.get("StartedAt") / 1000).astimezone(taipei_tz).isoformat() if message.get("StartedAt") else None
+                })
 
         return {
             "cluster": cluster_name,
