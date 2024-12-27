@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException, Query
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import pytz
+import json
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -140,10 +142,31 @@ async def get_task_logs(cluster_name: str, service_name: str):
             logGroupName=log_group_name,
             logStreamName=log_stream_name
         )
+
+        # Format log events for readability
+        taipei_tz = pytz.timezone('Asia/Taipei')
+        formatted_logs = []
+        for event in log_events.get('events', []):
+            message = json.loads(event.get('message', '{}'))
+            utc_time = datetime.utcfromtimestamp(event['timestamp'] / 1000).replace(tzinfo=timezone.utc)
+            local_time = utc_time.astimezone(taipei_tz).isoformat()
+            formatted_logs.append({
+                "timestamp": local_time,
+                "container_name": message.get("ContainerName"),
+                "task_id": message.get("TaskId"),
+                "cpu_utilized": message.get("ContainerCpuUtilized"),
+                "memory_utilized": message.get("ContainerMemoryUtilized"),
+                "memory_utilization": message.get("ContainerMemoryUtilization"),
+                "storage_read_bytes": message.get("ContainerStorageReadBytes"),
+                "storage_write_bytes": message.get("ContainerStorageWriteBytes"),
+                "network_rx_bytes": message.get("ContainerNetworkRxBytes"),
+                "network_tx_bytes": message.get("ContainerNetworkTxBytes")
+            })
+
         return {
             "cluster": cluster_name,
             "service": service_name,
-            "log_events": log_events.get('events', [])
+            "log_events": formatted_logs
         }
 
     except (BotoCoreError, ClientError) as e:
