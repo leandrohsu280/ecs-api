@@ -9,6 +9,7 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Enhanced ECS Cluster and Service Status API")
 ecs_client = boto3.client('ecs')
 cloudwatch_client = boto3.client('cloudwatch')
+logs_client = boto3.client('logs')
 
 @app.get("/")
 def read_root():
@@ -121,7 +122,7 @@ async def get_task_logs(cluster_name: str, service_name: str):
         log_group_name = f"/aws/ecs/containerinsights/{cluster_name}/performance"
         log_stream_prefix = f"AgentTelemetry-"
 
-        log_streams = cloudwatch_client.describe_log_streams(
+        log_streams = logs_client.describe_log_streams(
             logGroupName=log_group_name,
             logStreamNamePrefix=log_stream_prefix,
             orderBy="LastEventTime",
@@ -135,7 +136,7 @@ async def get_task_logs(cluster_name: str, service_name: str):
 
         # Fetch logs from the most recent log stream
         log_stream_name = log_streams_info[0]['logStreamName']
-        log_events = cloudwatch_client.get_log_events(
+        log_events = logs_client.get_log_events(
             logGroupName=log_group_name,
             logStreamName=log_stream_name
         )
