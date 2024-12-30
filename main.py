@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Dict, Union
 from datetime import datetime, timedelta
 import boto3
 import pytz
@@ -14,50 +13,17 @@ ecs_client = boto3.client('ecs')
 cloudwatch_client = boto3.client('cloudwatch')
 logs_client = boto3.client('logs')
 
-# Pydantic Models
-class MetricStatistics(BaseModel):
-    Minimum: float
-    Maximum: float
-    Average: float
-
-class ClusterMetricsResponse(BaseModel):
-    cluster: str
-    metrics: dict[str, MetricStatistics]
-
-class ServiceMetricsResponse(BaseModel):
-    cluster: str
-    service: str
-    metrics: dict[str, MetricStatistics]
-
-class ContainerLog(BaseModel):
-    timestamp: str
-    container_name: Optional[str]
-    cpu_utilized: Optional[float]
-    memory_utilized: Optional[int]
-    network_rx_bytes: Optional[int]
-    network_tx_bytes: Optional[int]
-
-class TaskLog(BaseModel):
-    timestamp: str
-    task_id: str
-    task_memory_utilization: Optional[float]
-    storage_read_bytes: Optional[int]
-    storage_write_bytes: Optional[int]
-    network_rx_bytes: Optional[int]
-    network_tx_bytes: Optional[int]
-
-class LogResponse(BaseModel):
-    cluster: str
-    service: str
-    logs: List[Union[ContainerLog, TaskLog]]
-
 # Routes
 @app.get("/")
 def read_root():
     return {"message": "ECS Cluster and Service Status API is running"}
 
-@app.get("/ecs/cluster/{cluster_name}", response_model=ClusterMetricsResponse)
-async def get_cluster_metrics(cluster_name: str, start_time: datetime = Query(None), end_time: datetime = Query(None)):
+@app.get("/ecs/cluster/{cluster_name}")
+def get_cluster_metrics(
+    cluster_name: str,
+    start_time: datetime = Query(None),
+    end_time: datetime = Query(None)
+):
     try:
         if not start_time or not end_time:
             end_time = datetime.utcnow()
@@ -86,8 +52,13 @@ async def get_cluster_metrics(cluster_name: str, start_time: datetime = Query(No
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching metrics: {e}")
 
-@app.get("/ecs/service/{cluster_name}/{service_name}", response_model=ServiceMetricsResponse)
-async def get_service_metrics(cluster_name: str, service_name: str, start_time: datetime = Query(None), end_time: datetime = Query(None)):
+@app.get("/ecs/service/{cluster_name}/{service_name}")
+def get_service_metrics(
+    cluster_name: str,
+    service_name: str,
+    start_time: datetime = Query(None),
+    end_time: datetime = Query(None)
+):
     try:
         if not start_time or not end_time:
             end_time = datetime.utcnow()
@@ -119,8 +90,8 @@ async def get_service_metrics(cluster_name: str, service_name: str, start_time: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching metrics: {e}")
 
-@app.get("/ecs/task/logs/{cluster_name}/{service_name}", response_model=LogResponse)
-async def get_task_logs(cluster_name: str, service_name: str):
+@app.get("/ecs/task/logs/{cluster_name}/{service_name}")
+def get_task_logs(cluster_name: str, service_name: str):
     try:
         log_group_name = f"/aws/ecs/containerinsights/{cluster_name}/performance"
         log_streams = logs_client.describe_log_streams(
@@ -146,24 +117,24 @@ async def get_task_logs(cluster_name: str, service_name: str):
             timestamp = datetime.utcfromtimestamp(event["timestamp"] / 1000).astimezone(taipei_tz).isoformat()
 
             if message.get("Type") == "Task":
-                logs.append(TaskLog(
-                    timestamp=timestamp,
-                    task_id=message.get("TaskId"),
-                    task_memory_utilization=message.get("TaskMemoryUtilization"),
-                    storage_read_bytes=message.get("StorageReadBytes"),
-                    storage_write_bytes=message.get("StorageWriteBytes"),
-                    network_rx_bytes=message.get("NetworkRxBytes"),
-                    network_tx_bytes=message.get("NetworkTxBytes"),
-                ))
+                logs.append({
+                    "timestamp": timestamp,
+                    "task_id": message.get("TaskId"),
+                    "task_memory_utilization": message.get("TaskMemoryUtilization"),
+                    "storage_read_bytes": message.get("StorageReadBytes"),
+                    "storage_write_bytes": message.get("StorageWriteBytes"),
+                    "network_rx_bytes": message.get("NetworkRxBytes"),
+                    "network_tx_bytes": message.get("NetworkTxBytes"),
+                })
             elif message.get("Type") == "Container":
-                logs.append(ContainerLog(
-                    timestamp=timestamp,
-                    container_name=message.get("ContainerName"),
-                    cpu_utilized=message.get("ContainerCpuUtilized"),
-                    memory_utilized=message.get("ContainerMemoryUtilized"),
-                    network_rx_bytes=message.get("ContainerNetworkRxBytes"),
-                    network_tx_bytes=message.get("ContainerNetworkTxBytes"),
-                ))
+                logs.append({
+                    "timestamp": timestamp,
+                    "container_name": message.get("ContainerName"),
+                    "cpu_utilized": message.get("ContainerCpuUtilized"),
+                    "memory_utilized": message.get("ContainerMemoryUtilized"),
+                    "network_rx_bytes": message.get("ContainerNetworkRxBytes"),
+                    "network_tx_bytes": message.get("ContainerNetworkTxBytes"),
+                })
 
         return {"cluster": cluster_name, "service": service_name, "logs": logs}
 
