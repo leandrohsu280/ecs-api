@@ -1,102 +1,125 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
+from typing import List, Optional, Union
 from datetime import datetime, timedelta
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
-import json
 import pytz
+import json
 
-# 初始化應用程式
+# Initialize FastAPI app
 app = FastAPI(title="Enhanced ECS Cluster and Service Status API")
 
-# 初始化 AWS 客戶端
+# Initialize AWS clients
 ecs_client = boto3.client('ecs')
 cloudwatch_client = boto3.client('cloudwatch')
 logs_client = boto3.client('logs')
 
+# Pydantic Models
+class MetricStatistics(BaseModel):
+    Minimum: float
+    Maximum: float
+    Average: float
+
+class ClusterMetricsResponse(BaseModel):
+    cluster: str
+    metrics: dict[str, MetricStatistics]
+
+class ServiceMetricsResponse(BaseModel):
+    cluster: str
+    service: str
+    metrics: dict[str, MetricStatistics]
+
+class ContainerLog(BaseModel):
+    timestamp: str
+    container_name: Optional[str]
+    cpu_utilized: Optional[float]
+    memory_utilized: Optional[int]
+    network_rx_bytes: Optional[int]
+    network_tx_bytes: Optional[int]
+
+class TaskLog(BaseModel):
+    timestamp: str
+    task_id: str
+    task_memory_utilization: Optional[float]
+    storage_read_bytes: Optional[int]
+    storage_write_bytes: Optional[int]
+    network_rx_bytes: Optional[int]
+    network_tx_bytes: Optional[int]
+
+class LogResponse(BaseModel):
+    cluster: str
+    service: str
+    logs: List[Union[ContainerLog, TaskLog]]
+
+# Routes
 @app.get("/")
 def read_root():
     return {"message": "ECS Cluster and Service Status API is running"}
 
-@app.get("/ecs/cluster/{cluster_name}")
-async def get_cluster_status(cluster_name: str):
+@app.get("/ecs/cluster/{cluster_name}", response_model=ClusterMetricsResponse)
+async def get_cluster_metrics(cluster_name: str, start_time: datetime = Query(None), end_time: datetime = Query(None)):
     try:
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(days=1)
+        if not start_time or not end_time:
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(days=1)
 
-        cluster_metrics = {}
-        for metric_name in ['CPUUtilization', 'MemoryUtilization']:
-            metric_data = cloudwatch_client.get_metric_statistics(
-                Namespace='AWS/ECS',
+        metrics = {}
+        for metric_name in ["CPUUtilization", "MemoryUtilization"]:
+            stats = cloudwatch_client.get_metric_statistics(
+                Namespace="AWS/ECS",
                 MetricName=metric_name,
-                Dimensions=[
-                    {'Name': 'ClusterName', 'Value': cluster_name}
-                ],
+                Dimensions=[{"Name": "ClusterName", "Value": cluster_name}],
                 StartTime=start_time,
                 EndTime=end_time,
                 Period=300,
-                Statistics=['Average']
+                Statistics=["Average", "Maximum", "Minimum"]
             )
-            cluster_metrics[metric_name] = metric_data.get('Datapoints', [{}])[0].get('Average', 0)
-
-        asg_details = {
-            "desiredCapacity": 5,
-            "runningInstances": 5,
-            "pendingInstances": 0
-        }
-
-        return {"cluster": cluster_name, "metrics": cluster_metrics, "asgDetails": asg_details}
-
-    except (BotoCoreError, ClientError) as e:
-        raise HTTPException(status_code=500, detail=f"AWS error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-
-@app.get("/ecs/service/{cluster_name}/{service_name}")
-async def get_service_status(cluster_name: str, service_name: str):
-    try:
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(days=1)
-
-        service_metrics = {}
-        for metric_name in ['CPUUtilization', 'MemoryUtilization']:
-            metric_data = cloudwatch_client.get_metric_statistics(
-                Namespace='AWS/ECS',
-                MetricName=metric_name,
-                Dimensions=[
-                    {'Name': 'ClusterName', 'Value': cluster_name},
-                    {'Name': 'ServiceName', 'Value': service_name}
-                ],
-                StartTime=start_time,
-                EndTime=end_time,
-                Period=300,
-                Statistics=['Average']
-            )
-            service_metrics[metric_name] = metric_data.get('Datapoints', [{}])[0].get('Average', 0)
-
-        service_details = ecs_client.describe_services(
-            cluster=cluster_name,
-            services=[service_name]
-        )
-        service_status = service_details['services'][0] if service_details['services'] else {}
-
-        return {
-            "cluster": cluster_name,
-            "service": service_name,
-            "metrics": service_metrics,
-            "status": {
-                "desiredCount": service_status.get("desiredCount"),
-                "runningCount": service_status.get("runningCount"),
-                "pendingCount": service_status.get("pendingCount"),
-                "status": service_status.get("status")
+            datapoints = stats.get("Datapoints", [])
+            metrics[metric_name] = {
+                "Average": sum(d.get("Average", 0) for d in datapoints) / len(datapoints) if datapoints else 0,
+                "Maximum": max(d.get("Maximum", 0) for d in datapoints) if datapoints else 0,
+                "Minimum": min(d.get("Minimum", 0) for d in datapoints) if datapoints else 0,
             }
-        }
 
-    except (BotoCoreError, ClientError) as e:
-        raise HTTPException(status_code=500, detail=f"AWS error: {str(e)}")
+        return {"cluster": cluster_name, "metrics": metrics}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching metrics: {e}")
 
-@app.get("/ecs/task/logs/{cluster_name}/{service_name}")
+@app.get("/ecs/service/{cluster_name}/{service_name}", response_model=ServiceMetricsResponse)
+async def get_service_metrics(cluster_name: str, service_name: str, start_time: datetime = Query(None), end_time: datetime = Query(None)):
+    try:
+        if not start_time or not end_time:
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(days=1)
+
+        metrics = {}
+        for metric_name in ["CPUUtilization", "MemoryUtilization"]:
+            stats = cloudwatch_client.get_metric_statistics(
+                Namespace="AWS/ECS",
+                MetricName=metric_name,
+                Dimensions=[
+                    {"Name": "ClusterName", "Value": cluster_name},
+                    {"Name": "ServiceName", "Value": service_name}
+                ],
+                StartTime=start_time,
+                EndTime=end_time,
+                Period=300,
+                Statistics=["Average", "Maximum", "Minimum"]
+            )
+            datapoints = stats.get("Datapoints", [])
+            metrics[metric_name] = {
+                "Average": sum(d.get("Average", 0) for d in datapoints) / len(datapoints) if datapoints else 0,
+                "Maximum": max(d.get("Maximum", 0) for d in datapoints) if datapoints else 0,
+                "Minimum": min(d.get("Minimum", 0) for d in datapoints) if datapoints else 0,
+            }
+
+        return {"cluster": cluster_name, "service": service_name, "metrics": metrics}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching metrics: {e}")
+
+@app.get("/ecs/task/logs/{cluster_name}/{service_name}", response_model=LogResponse)
 async def get_task_logs(cluster_name: str, service_name: str):
     try:
         log_group_name = f"/aws/ecs/containerinsights/{cluster_name}/performance"
@@ -106,30 +129,46 @@ async def get_task_logs(cluster_name: str, service_name: str):
             orderBy="LogStreamName",
             descending=True
         )
-        log_streams_info = log_streams.get('logStreams', [])
-        if not log_streams_info:
-            return {"message": "No log streams found"}
 
-        log_stream_name = log_streams_info[0]['logStreamName']
+        if not log_streams.get("logStreams"):
+            return {"cluster": cluster_name, "service": service_name, "logs": []}
+
+        log_stream_name = log_streams["logStreams"][0]["logStreamName"]
         log_events = logs_client.get_log_events(
             logGroupName=log_group_name,
             logStreamName=log_stream_name
         )
 
-        taipei_tz = pytz.timezone('Asia/Taipei')
-        formatted_logs = []
-        for event in log_events.get('events', []):
-            message = json.loads(event.get('message', '{}'))
-            utc_time = datetime.utcfromtimestamp(event['timestamp'] / 1000)
-            local_time = utc_time.astimezone(taipei_tz).isoformat()
-            formatted_logs.append({"timestamp": local_time, "message": message})
+        taipei_tz = pytz.timezone("Asia/Taipei")
+        logs = []
+        for event in log_events.get("events", []):
+            message = json.loads(event.get("message", "{}"))
+            timestamp = datetime.utcfromtimestamp(event["timestamp"] / 1000).astimezone(taipei_tz).isoformat()
 
-        return {"cluster": cluster_name, "service": service_name, "log_events": formatted_logs}
+            if message.get("Type") == "Task":
+                logs.append(TaskLog(
+                    timestamp=timestamp,
+                    task_id=message.get("TaskId"),
+                    task_memory_utilization=message.get("TaskMemoryUtilization"),
+                    storage_read_bytes=message.get("StorageReadBytes"),
+                    storage_write_bytes=message.get("StorageWriteBytes"),
+                    network_rx_bytes=message.get("NetworkRxBytes"),
+                    network_tx_bytes=message.get("NetworkTxBytes"),
+                ))
+            elif message.get("Type") == "Container":
+                logs.append(ContainerLog(
+                    timestamp=timestamp,
+                    container_name=message.get("ContainerName"),
+                    cpu_utilized=message.get("ContainerCpuUtilized"),
+                    memory_utilized=message.get("ContainerMemoryUtilized"),
+                    network_rx_bytes=message.get("ContainerNetworkRxBytes"),
+                    network_tx_bytes=message.get("ContainerNetworkTxBytes"),
+                ))
 
-    except (BotoCoreError, ClientError) as e:
-        raise HTTPException(status_code=500, detail=f"AWS error: {str(e)}")
+        return {"cluster": cluster_name, "service": service_name, "logs": logs}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching logs: {e}")
 
 if __name__ == "__main__":
     import uvicorn
