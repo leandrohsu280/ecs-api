@@ -3,16 +3,20 @@ const app = require('express')();
 const aws = require('aws-sdk');
 require('aws-sdk/lib/maintenance_mode_message').suppress = true;
 
-// const config = require('./env.json')
 
 const api_init = require('./api/init.js')
 const web_init = require('./public/init.js')
 
+//==========config
+
+// const config = require('./env.json')
 // aws.config.update({
 //     accessKeyId: config.accesskey,
 //     secretAccessKey: config.secretkey,
 //     region: config.region
 // })
+
+//==========config
 
 
 function start(){
@@ -29,3 +33,9 @@ function start(){
 }
 
 start();
+
+//don't kill process after error
+
+process.on('uncaughtException', function (err) {
+    console.log(err);
+});

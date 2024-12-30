@@ -15,7 +15,7 @@ module.exports = {
             let resdata = { success: true, responce: {}, raw: {} };
 
             const cloudwatch = new aws.CloudWatch();
-            const asg = new aws.AutoScaling();
+            // const asg = new aws.AutoScaling();
             const ecs = new aws.ECS();
             const time_end = new Date();
             const time_start = new Date(time_end.getTime() - req.body.timelong * 60 * 60 * 1000);
