@@ -1,4 +1,6 @@
 fastapi
 uvicorn
 boto3
+botocore
+pydantic
 pytz
