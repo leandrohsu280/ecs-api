@@ -71,9 +71,9 @@ class TaskLog(BaseModel):
 class LogEventResponse(BaseModel):
     cluster: str
     service: str
-    container_logs: List[ContainerLog]
-    task_logs: List[TaskLog]
+    log_events: List[Union[ContainerLog, TaskLog]]
 
+# Routes
 @app.get("/")
 def read_root():
     return {"message": "ECS Cluster and Service Status API is running"}
@@ -178,7 +178,6 @@ async def get_task_logs(cluster_name: str, service_name: str):
     try:
         log_group_name = f"/aws/ecs/containerinsights/{cluster_name}/performance"
 
-        # Retrieve log streams with AgentTelemetry prefix
         log_streams = logs_client.describe_log_streams(
             logGroupName=log_group_name,
             logStreamNamePrefix="AgentTelemetry-",
@@ -191,7 +190,6 @@ async def get_task_logs(cluster_name: str, service_name: str):
             logging.warning(f"No log streams found for log group {log_group_name}")
             return {"message": "No logs found"}
 
-        # Fetch logs from the most recent log stream
         log_stream_name = log_streams_info[0]['logStreamName']
         log_events = logs_client.get_log_events(
             logGroupName=log_group_name,
@@ -199,16 +197,13 @@ async def get_task_logs(cluster_name: str, service_name: str):
         )
 
         taipei_tz = pytz.timezone('Asia/Taipei')
-        container_logs = []
-        task_logs = []
-
+        formatted_logs = []
         for event in log_events.get('events', []):
             message = json.loads(event.get('message', '{}'))
             utc_time = datetime.utcfromtimestamp(event['timestamp'] / 1000).replace(tzinfo=timezone.utc)
             local_time = utc_time.astimezone(taipei_tz).isoformat()
-
             if message.get("Type") == "Container":
-                container_logs.append(ContainerLog(
+                formatted_logs.append(ContainerLog(
                     timestamp=local_time,
                     container_name=message.get("ContainerName"),
                     task_id=message.get("TaskId"),
@@ -221,7 +216,7 @@ async def get_task_logs(cluster_name: str, service_name: str):
                     network_tx_bytes=message.get("ContainerNetworkTxBytes")
                 ))
             elif message.get("Type") == "Task":
-                task_logs.append(TaskLog(
+                formatted_logs.append(TaskLog(
                     timestamp=local_time,
                     task_id=message.get("TaskId"),
                     service_name=message.get("ServiceName"),
@@ -236,8 +231,7 @@ async def get_task_logs(cluster_name: str, service_name: str):
         return {
             "cluster": cluster_name,
             "service": service_name,
-            "container_logs": container_logs,
-            "task_logs": task_logs
+            "log_events": formatted_logs
         }
 
     except (BotoCoreError, ClientError) as e:
