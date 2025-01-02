@@ -7,14 +7,16 @@ require('aws-sdk/lib/maintenance_mode_message').suppress = true;
 const api_init = require('./api/init.js')
 const web_init = require('./public/init.js')
 
+const conf = require('./config.json')
+
 //==========config
 
-// const config = require('./env.json')
-// aws.config.update({
-//     accessKeyId: config.accesskey,
-//     secretAccessKey: config.secretkey,
-//     region: config.region
-// })
+const config = require('./env.json')
+aws.config.update({
+    accessKeyId: config.accesskey,
+    secretAccessKey: config.secretkey,
+    region: config.region
+})
 
 //==========config
 
@@ -22,6 +24,7 @@ const web_init = require('./public/init.js')
 function start(){
 
     app.express = express;
+    app.conf = conf;
 
     api_init.init(app, aws);
     web_init.init(app);

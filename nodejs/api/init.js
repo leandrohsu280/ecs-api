@@ -7,6 +7,8 @@ const readfiles = fs.readdirSync(apiFolderPath);
 module.exports = {
     async init(app, aws) {
 
+        app.path = path;
+
         for (const folder of readfiles) {
             const subFolderPath = path.join(apiFolderPath, folder);
             if (!fs.lstatSync(subFolderPath).isDirectory() || folder == "interface") continue;

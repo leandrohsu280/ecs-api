@@ -10,7 +10,19 @@ module.exports = {
 
         app.use(app.express.json());
 
-        app.post('/api/cloudwatch/logs', async (req, res) => {
+        app.post(app.conf.reqestPath.replace('TYPE', app.path.basename(__dirname)).replace('NAME', this.name), async (req, res) => {
+
+            /* Request Structure
+            
+            {
+                "logGroupName": "string",
+                "logStreamName": "string",
+                "timeRange": number,
+                "limit": number
+            }
+            
+            */
+
             const clientData = req.body;
             let resdata = { success: true, responce: {} };
 

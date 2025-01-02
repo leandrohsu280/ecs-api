@@ -10,7 +10,17 @@ module.exports = {
 
         app.use(app.express.json());
 
-        app.post('/api/ecs/resource', async (req, res) => {
+        app.post(app.conf.reqestPath.replace('TYPE', app.path.basename(__dirname)).replace('NAME', this.name), async (req, res) => {
+
+            /* Request Structure
+            
+            {
+                "cluster": "string",
+                "info": ["string"],
+                "timelong": number
+            }
+            
+            */
 
             let resdata = { success: true, responce: {}, raw: {} };
 
