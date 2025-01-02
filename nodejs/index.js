@@ -11,12 +11,12 @@ const conf = require('./config.json')
 
 //==========config
 
-const config = require('./env.json')
-aws.config.update({
-    accessKeyId: config.accesskey,
-    secretAccessKey: config.secretkey,
-    region: config.region
-})
+// const config = require('./env.json')
+// aws.config.update({
+//     accessKeyId: config.accesskey,
+//     secretAccessKey: config.secretkey,
+//     region: config.region
+// })
 
 //==========config
 
